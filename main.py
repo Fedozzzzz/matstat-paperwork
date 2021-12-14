@@ -34,12 +34,7 @@ def get_inseparable_data():
 
 
 def get_nonlinear_data():
-    x, y = datasets.make_classification(n_samples=200,
-                                        n_features=2,
-                                        n_repeated=0,
-                                        class_sep=1,
-                                        n_redundant=0,
-                                        random_state=6)
+    x, y = make_circles(n_samples=500, noise=0.1, factor=0.1, random_state=0)
     min_max_scaler = preprocessing.MinMaxScaler()
     x = min_max_scaler.fit_transform(x)
     y[y == 0] = -1
@@ -224,10 +219,7 @@ plot_graph(X_train, y_train, svm_soft)
 plot_graph(X_test, y_test, svm_soft, without_sv=True)
 
 svm_nonlinear = SVMNonLinear(2.0)
-x, y = make_circles(n_samples=500, noise=0.1, factor=0.1, random_state=0)
-min_max_scaler = preprocessing.MinMaxScaler()
-x = min_max_scaler.fit_transform(x)
-y[y == 0] = -1
+x, y = get_nonlinear_data()
 X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.5, random_state=42)
 
 svm_nonlinear.train(X_train, y_train)
