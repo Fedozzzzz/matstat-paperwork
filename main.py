@@ -4,13 +4,17 @@ from sklearn import datasets
 import cvxopt
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
-from sklearn.datasets import make_circles, make_moons
+from sklearn.datasets import make_circles
 
 cvxopt.solvers.options['show_progress'] = False
 
 
 def get_separable_data():
-    x, y = datasets.make_blobs(n_samples=100, centers=2, n_features=2, cluster_std=1.25, random_state=9)
+    x, y = datasets.make_blobs(n_samples=100,
+                               centers=2,
+                               n_features=2,
+                               cluster_std=1.25,
+                               random_state=9)
     min_max_scaler = preprocessing.MinMaxScaler()
     x = min_max_scaler.fit_transform(x)
     y[y == 0] = -1
@@ -18,7 +22,11 @@ def get_separable_data():
 
 
 def get_inseparable_data():
-    x, y = datasets.make_blobs(n_samples=100, centers=2, n_features=2, cluster_std=4.25, random_state=9)
+    x, y = datasets.make_blobs(n_samples=100,
+                               centers=2,
+                               n_features=2,
+                               cluster_std=4.25,
+                               random_state=9)
     min_max_scaler = preprocessing.MinMaxScaler()
     x = min_max_scaler.fit_transform(x)
     y[y == 0] = -1
@@ -36,20 +44,6 @@ def get_nonlinear_data():
     x = min_max_scaler.fit_transform(x)
     y[y == 0] = -1
     return x, y
-
-
-# нелинейные
-def no_lin_data_set(nn, dd=2, k=2):
-    xx = np.zeros((nn * k, dd))
-    yy = np.zeros(nn * k)
-    for i in range(k):
-        ii = range(nn * i, nn * (i + 1))
-        rad = np.linspace(0.0, 1, nn)
-        theta = np.linspace(i * 4, (i + 1) * 4, nn) + np.random.randn(nn) * 0.2
-        xx[ii] = np.c_[rad * np.sin(theta), rad * np.cos(theta)]
-        yy[ii] = i
-    yy[yy == 0] -= 1
-    return xx, yy
 
 
 class SVMHardMargin:
@@ -96,6 +90,7 @@ class SVMSoftMargin:
         self.b = None
         self.c = c
         self.support_vectors = None
+        self.support_vectors_unbounded = None
 
     def train(self, x, y):
         x_shape = len(x)
@@ -140,7 +135,7 @@ class SVMSoftMargin:
 
 
 class SVMNonLinear:
-    def __init__(self, c, kernel='linear'):
+    def __init__(self, c):
         self.w = None
         self.margin = None
         self.alpha = None
@@ -150,7 +145,6 @@ class SVMNonLinear:
 
     def rbf(self, x1, x2):
         sigma = 2 * self.x.var()
-        # return np.exp(-(np.linalg.norm(x1 - x2) ** 2) / (2 * (sigma ** 2)))
         return np.exp(-(np.linalg.norm(x1 - x2) ** 2) / sigma)
 
     def train(self, x, y):
@@ -206,8 +200,12 @@ def plot_graph(x, y, model, without_sv=False):
                linestyles=['--', '-', '--'])
 
     if without_sv is False:
-        ax.scatter(model.support_vectors[:, 0], model.support_vectors[:, 1], s=100,
-                   linewidth=1, facecolors='none', edgecolors='k')
+        ax.scatter(model.support_vectors[:, 0],
+                   model.support_vectors[:, 1],
+                   s=100,
+                   linewidth=1,
+                   facecolors='none',
+                   edgecolors='k')
     plt.show()
 
 
