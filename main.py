@@ -18,7 +18,7 @@ def get_separable_data():
 
 
 def get_inseparable_data():
-    x, y = datasets.make_blobs(n_samples=100, centers=2, n_features=2, cluster_std=3.25, random_state=9)
+    x, y = datasets.make_blobs(n_samples=100, centers=2, n_features=2, cluster_std=4.25, random_state=9)
     min_max_scaler = preprocessing.MinMaxScaler()
     x = min_max_scaler.fit_transform(x)
     y[y == 0] = -1
@@ -107,18 +107,29 @@ class SVMSoftMargin:
         h = cvxopt.matrix(np.vstack(np.hstack((np.zeros(x_shape), np.ones(x_shape) * self.c))))
         sol = cvxopt.solvers.qp(P, q, G, h, A, b)
         alpha = np.array(sol['x'])
-        self.w = np.array([sum(alpha[i] * y[i] * x[i, 0] for i in range(x_shape)),
-                           sum(alpha[i] * y[i] * x[i, 1] for i in range(x_shape))]).flatten()
+
+        eps = 1e-3
+        sv_mask_unbounded = ((alpha > eps) & (alpha < self.c - eps)).flatten()
+        sv_mask_all = (alpha > eps).flatten()
+
+        self.support_vectors = x[sv_mask_all]
+        sv_y = y[sv_mask_all]
+        alpha_sv = alpha[sv_mask_all]
+
+        self.support_vectors_unbounded = x[sv_mask_unbounded]
+        svU_y = y[sv_mask_unbounded]
+
+        self.w = np.array(
+            [sum(alpha_sv[i] * sv_y[i] * self.support_vectors[i, 0] for i in range(len(self.support_vectors))),
+             sum(alpha_sv[i] * sv_y[i] * self.support_vectors[i, 1] for i in
+                 range(len(self.support_vectors)))]).flatten()
         print('self.w', self.w)
         self.margin = 2 / np.linalg.norm(self.w)
         print('self.margin', self.margin)
-        eps = 1e-3
-        sv_mask = ((alpha > eps) & (alpha < self.c - eps)).flatten()
-        self.support_vectors = x[sv_mask]
-        print('self.support_vectors', self.support_vectors)
-        sv_y = y[sv_mask]
+
         self.b = np.mean(
-            [sv_y[i] - np.dot(self.support_vectors[i], self.w) for i in range(len(self.support_vectors))])
+            [svU_y[i] - np.dot(self.support_vectors_unbounded[i], self.w) for i in
+             range(len(self.support_vectors_unbounded))])
         print('self.b', self.b)
 
     def predict(self, xt):
@@ -129,7 +140,7 @@ class SVMSoftMargin:
 
 
 class SVMNonLinear:
-    def __init__(self, c):
+    def __init__(self, c, kernel='linear'):
         self.w = None
         self.margin = None
         self.alpha = None
@@ -175,9 +186,6 @@ class SVMNonLinear:
         return np.array([sum([self.alpha_sv[j] * self.sv_y[j] * self.rbf(xt[i], self.support_vectors[j]) for j in
                               range(len(self.support_vectors))]) + self.b for i in range(len(xt))])
 
-    def predict_sign(self, xt):
-        return np.array([np.sign(np.dot(self.w, xt[i]) + self.b) for i in range(len(xt))])
-
 
 def plot_graph(x, y, model, without_sv=False):
     ax = plt.gca()
@@ -211,7 +219,7 @@ plot_graph(x, y, svm_hard)
 svm_soft = SVMSoftMargin(2.0)
 x, y = get_inseparable_data()
 
-X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.5, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.5, random_state=5)
 
 svm_soft.train(X_train, y_train)
 plot_graph(X_train, y_train, svm_soft)
