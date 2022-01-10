@@ -86,6 +86,7 @@ class SVMSoftMargin:
         self.c = c
         self.support_vectors = None
         self.support_vectors_unbounded = None
+        self.support_vectors_bounded = None
 
     def train(self, x, y):
         x_shape = len(x)
@@ -101,12 +102,14 @@ class SVMSoftMargin:
         eps = 1e-3
         sv_mask_unbounded = ((alpha > eps) & (alpha < self.c - eps)).flatten()
         sv_mask_all = (alpha > eps).flatten()
+        sv_mask_bounded = (alpha >= self.c - eps).flatten()
 
         self.support_vectors = x[sv_mask_all]
         sv_y = y[sv_mask_all]
         alpha_sv = alpha[sv_mask_all]
 
         self.support_vectors_unbounded = x[sv_mask_unbounded]
+        self.support_vectors_bounded = x[sv_mask_bounded]
         svU_y = y[sv_mask_unbounded]
 
         self.w = np.array(
@@ -117,6 +120,8 @@ class SVMSoftMargin:
         self.margin = 2 / np.linalg.norm(self.w)
         print('self.margin', self.margin)
 
+        print('USV', len(self.support_vectors_unbounded))
+        print('BSV', len(self.support_vectors_bounded))
         self.b = np.mean(
             [svU_y[i] - np.dot(self.support_vectors_unbounded[i], self.w) for i in
              range(len(self.support_vectors_unbounded))])
@@ -130,7 +135,8 @@ class SVMSoftMargin:
 
 
 class SVMNonLinear:
-    def __init__(self, c):
+    def __init__(self, c, gamma):
+        self.gamma = gamma
         self.w = None
         self.margin = None
         self.alpha = None
@@ -139,7 +145,14 @@ class SVMNonLinear:
         self.support_vectors = None
 
     def rbf(self, x1, x2):
-        sigma = 2 * self.x.var()
+        sigma = None
+        if self.gamma == 'scale':
+            sigma = 2 * self.x.var()
+            print('self.x.var():', self.x.var())
+        elif self.gamma == 'auto':
+            sigma = 2
+        elif type(self.gamma) is float:
+            sigma = self.gamma
         return np.exp(-(np.linalg.norm(x1 - x2) ** 2) / sigma)
 
     def train(self, x, y):
@@ -157,13 +170,18 @@ class SVMNonLinear:
         eps = 1e-6
         self.sv_mask_unbounded = ((self.alpha > eps) & (self.alpha < self.c - eps)).flatten()
         self.sv_mask_all = (self.alpha > eps).flatten()
+        sv_mask_bounded = (self.alpha >= self.c - eps).flatten()
 
         self.support_vectors = x[self.sv_mask_all]
         self.sv_y = y[self.sv_mask_all]
         self.alpha_sv = self.alpha[self.sv_mask_all]
 
         self.support_vectors_unbounded = x[self.sv_mask_unbounded]
+        self.support_vectors_bounded = x[sv_mask_bounded]
         svU_y = y[self.sv_mask_unbounded]
+
+        print('USV', len(self.support_vectors_unbounded))
+        print('BSV', len(self.support_vectors_bounded))
 
         self.b = np.mean([svU_y[i] - sum(
             [self.alpha_sv[j] * self.sv_y[j] * self.rbf(self.support_vectors_unbounded[i], self.support_vectors[j])
@@ -175,8 +193,9 @@ class SVMNonLinear:
         return np.array([sum([self.alpha_sv[j] * self.sv_y[j] * self.rbf(xt[i], self.support_vectors[j]) for j in
                               range(len(self.support_vectors))]) + self.b for i in range(len(xt))])
 
+from matplotlib.pyplot import text
 
-def plot_graph(x, y, model, without_sv=False):
+def plot_graph(x, y, model, c=None, g=None, is_hard_margin=False):
     ax = plt.gca()
     plt.scatter(x[:, 0], x[:, 1], c=y, s=50, cmap='winter')
     xlim = ax.get_xlim()
@@ -194,34 +213,93 @@ def plot_graph(x, y, model, without_sv=False):
                alpha=0.5,
                linestyles=['--', '-', '--'])
 
-    if without_sv is False:
+    if c is not None and g is not None:
+        plt.title('C={}, sigma={}'.format(c, g))
+    elif c is not None:
+        plt.title('C={}'.format(c))
+
+    if is_hard_margin is True:
         ax.scatter(model.support_vectors[:, 0],
                    model.support_vectors[:, 1],
                    s=100,
-                   linewidth=1,
+                   linewidth=1.5,
                    facecolors='none',
-                   edgecolors='k')
+                   edgecolors='k',
+                   label='sv')
+        # ax.legend()
+        return plt.show()
+
+    ax.scatter(model.support_vectors_bounded[:, 0],
+               model.support_vectors_bounded[:, 1],
+               s=100,
+               linewidth=1.5,
+               facecolors='none',
+               edgecolors='r',
+               label='bsv')
+
+    ax.scatter(model.support_vectors_unbounded[:, 0],
+               model.support_vectors_unbounded[:, 1],
+               s=100,
+               linewidth=1.5,
+               facecolors='none',
+               edgecolors='k',
+               label='usv')
+
+    ax.legend()
+
     plt.show()
 
 
+# LINEAR SVM (HARD MARGIN)
 svm_hard = SVMHardMargin()
 x, y = get_separable_data()
 svm_hard.train(x, y)
-plot_graph(x, y, svm_hard)
+plot_graph(x, y, svm_hard, is_hard_margin=True)
 
-svm_soft = SVMSoftMargin(2.0)
+# LINEAR SVM (SOFT MARGIN)
+svm_soft = SVMSoftMargin(3.0)
 x, y = get_inseparable_data()
-
-X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.5, random_state=5)
-
-svm_soft.train(X_train, y_train)
-plot_graph(X_train, y_train, svm_soft)
-plot_graph(X_test, y_test, svm_soft, without_sv=True)
-
-svm_nonlinear = SVMNonLinear(2.0)
+svm_soft.train(x, y)
+plot_graph(x, y, svm_soft, c=3.0)
+#
+# NON LINEAR SVM
+svm_nonlinear = SVMNonLinear(2.0, 'scale')
 x, y = get_nonlinear_data()
-X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.5, random_state=42)
+svm_nonlinear.train(x, y)
+plot_graph(x, y, svm_nonlinear)
+#
+# C_arr = [0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0]
+# for c in C_arr:
+#     print("C={}".format(c))
+#     svm_soft = SVMSoftMargin(c)
+#     x, y = get_inseparable_data()
+#     svm_soft.train(x, y)
+#     plot_graph(x, y, svm_soft, c)
 
-svm_nonlinear.train(X_train, y_train)
-plot_graph(X_train, y_train, svm_nonlinear)
-plot_graph(X_test, y_test, svm_nonlinear, without_sv=True)
+# print('-------------------------------------------------------------------------------')
+# C_arr = [0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 50.0, 100.0, 200.0]
+# gamma_arr = ['scale', 'auto', 0.01, 0.1, 1.0]
+# for g in gamma_arr:
+#     for c in C_arr:
+#         print("C={}, gamma={}".format(c, g))
+#         svm_nonlinear = SVMNonLinear(c, g)
+#         x, y = get_nonlinear_data()
+#         svm_nonlinear.train(x, y)
+#         plot_graph(x, y, svm_nonlinear, c, g)
+#     print('-------------------------------------------------------------------------------')
+
+# # print("C={}, gamma={}".format(c, g))
+# svm_nonlinear = SVMNonLinear(200.0, 'auto')
+# x, y = get_nonlinear_data()
+# svm_nonlinear.train(x, y)
+# plot_graph(x, y, svm_nonlinear)
+
+# svm_nonlinear = SVMNonLinear(10.0, 0.01)
+# x, y = get_nonlinear_data()
+# svm_nonlinear.train(x, y)
+# plot_graph(x, y, svm_nonlinear)
+#
+# svm_nonlinear = SVMNonLinear(100.0, 0.01)
+# x, y = get_nonlinear_data()
+# svm_nonlinear.train(x, y)
+# plot_graph(x, y, svm_nonlinear)
